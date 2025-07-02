@@ -24,18 +24,22 @@ clinical and biological features.
 
 @st.cache_data
 def load_data():
-    """Load data with error handling"""
+    """Load data with multiple options"""
+    # Try to load from repository first
     try:
-        # Using raw string or double backslashes
-        X = pd.read_csv(r"C:\Users\SOL\Downloads\X.csv")
-        y = pd.read_csv(r"C:\Users\SOL\Downloads\y.csv")
-        return X, y
+        X = pd.read_csv("X.csv")
+        y = pd.read_csv("y.csv")
+        return X, y, "repository"
     except FileNotFoundError:
-        st.error("❌ CSV files not found. Please check the file paths.")
-        st.stop()
+        try:
+            X = pd.read_csv("data/X.csv")
+            y = pd.read_csv("data/y.csv")
+            return X, y, "repository"
+        except FileNotFoundError:
+            return None, None, "upload_needed"
     except Exception as e:
         st.error(f"❌ Error loading data: {str(e)}")
-        st.stop()
+        return None, None, "error"
 
 @st.cache_resource
 def train_model(X_train, y_train):
@@ -90,8 +94,43 @@ def train_model(X_train, y_train):
     
     return ensemble_model
 
-# Load data
-X, y = load_data()
+# Try to load data
+X, y, load_status = load_data()
+
+# If data loading failed, show file upload option
+if load_status == "upload_needed":
+    st.warning("📁 Data files not found in repository. Please upload your CSV files.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Upload X.csv")
+        uploaded_X = st.file_uploader("Choose X.csv file", type="csv", key="X")
+        
+    with col2:
+        st.subheader("Upload y.csv")
+        uploaded_y = st.file_uploader("Choose y.csv file", type="csv", key="y")
+    
+    if uploaded_X is not None and uploaded_y is not None:
+        try:
+            X = pd.read_csv(uploaded_X)
+            y = pd.read_csv(uploaded_y)
+            st.success("✅ Files uploaded successfully!")
+        except Exception as e:
+            st.error(f"❌ Error reading uploaded files: {str(e)}")
+            st.stop()
+    else:
+        st.info("👆 Please upload both X.csv and y.csv files to continue.")
+        st.markdown("""
+        **Instructions:**
+        1. Upload your X.csv file (features)
+        2. Upload your y.csv file (target variable)
+        3. The application will automatically process the data
+        """)
+        st.stop()
+
+elif load_status == "error":
+    st.stop()
 
 # Define features
 features = ['age_at_diagnosis', 'taille', 'CA19-9', 'ACE', 'volume_colon',
@@ -103,6 +142,7 @@ features = ['age_at_diagnosis', 'taille', 'CA19-9', 'ACE', 'volume_colon',
 missing_features = [f for f in features if f not in X.columns]
 if missing_features:
     st.error(f"❌ Missing columns in data: {missing_features}")
+    st.info("Available columns: " + ", ".join(X.columns.tolist()))
     st.stop()
 
 X = X[features]
@@ -210,7 +250,6 @@ if st.button("🔮 Make Prediction", type="primary", use_container_width=True):
         
     except Exception as e:
         st.error(f"❌ Error during prediction: {str(e)}")
-
 
 
 # Footer
